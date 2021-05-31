@@ -1,61 +1,52 @@
-waitUntil {!isNil "huron_typename"};
+waitUntil { !isNil "huron_typename" };
 
-// Classnames of objects which should be added as editable for Zeus
-private _vehicleClassnames = [toLower huron_typename];
+_vehicleClassnames = [huron_typename] + KP_liberation_crates;
+
+
 {
-    _vehicleClassnames append _x;
-} forEach [
-    KPLIB_crates,
-    KPLIB_b_light_classes,
-    KPLIB_b_heavy_classes,
-    KPLIB_b_air_classes,
-    KPLIB_b_static_classes,
-    KPLIB_b_support_classes
-];
-if (KP_liberation_enemies_zeus) then {_vehicleClassnames append KPLIB_o_allVeh_classes;};
+	_vehicleClassnames = _vehicleClassnames + [_x select 0];
+} foreach (light_vehicles + heavy_vehicles + air_vehicles + static_vehicles + support_vehicles) ;
 
-private _valids = [];
-private _toRemove = [];
-private _toAdd = [];
+while { true } do {
 
-while {true} do {
-    waitUntil {sleep 1; !(allCurators isEqualTo [])};
+	waitUntil { sleep 0.3; count allCurators > 0 };
 
-    // Add units
-    _valids = allUnits select {
-        (alive _x)                                                                              // Alive
-        && {
-            (KP_liberation_enemies_zeus && {!(side (group _x) isEqualTo GRLIB_side_civilian)})  // Not civilian side, if enemy adding is enabled
-            || {side (group _x) isEqualTo GRLIB_side_friendly}                                  // Player side if enemy adding is disabled
-        }
-        && {((str _x) find "BIS_SUPP_HQ_") isEqualTo -1}                                        // Not a HQ entity from support module
-    };
+	_zeusunits = [];
+	{
+		if ((side group _x == GRLIB_side_friendly) && (_x distance startbase > 1000) && alive _x) then {
+			_zeusunits pushback _x;
+		};
+	} foreach allUnits;
 
-    // Add vehicles
-    _valids append (vehicles select {
-        (alive _x)                                                                              // Alive
-        && {
-            ((toLower (typeOf _x)) in _vehicleClassnames)                                       // In valid classnames
-            || (_x getVariable ["KPLIB_captured", false])                                       // or captured
-            || (_x getVariable ["KPLIB_seized", false])                                         // or seized
-        }
-        && {isNull (attachedTo _x)}                                                             // Not attached to something
-    });
+	{
+		if (((typeof _x in _vehicleClassnames) || (_x getVariable ["GRLIB_captured", 0] == 1)) && ((_x distance startbase > 1000) && (isNull attachedTo _x) || (typeof _x == huron_typename)) && alive _x ) then {
+			_zeusunits pushback _x;
+		};
+	} foreach vehicles;
 
-    // Add playable units
-    _valids append switchableUnits;
-    _valids append playableUnits;
+	_zeusunits = _zeusunits + switchableUnits;
+	_zeusunits = _zeusunits + playableUnits;
+	_zeusunits = _zeusunits - (curatorEditableObjects (allCurators select 0));
 
-    {
-        // Remove death or attached units
-        _toRemove = ((curatorEditableObjects _x) select {!(alive _x) || !(isNull (attachedTo _x))});
+	_units_to_remove = [];
+	{
+		if ( !(alive _x) || !(isNull attachedTo _x)) then {
+			_units_to_remove pushback _x;
+		};
+	} foreach (curatorEditableObjects (allCurators select 0));
 
-        // Filter already added units of this curator
-        _toAdd = _valids - (curatorEditableObjects _x);
+	{
+		_zgm = _x;
+		_zgm addCuratorEditableObjects [_zeusunits,true];
+		_zgm removeCuratorEditableObjects [_units_to_remove,true];
 
-        // Add and remove units
-        _x addCuratorEditableObjects [_toAdd, true];
-        _x removeCuratorEditableObjects [_toRemove, true];
-    } forEach allCurators;
-    sleep 9;
+		_zgm  setCuratorCoef ["edit", 0];
+		_zgm  setCuratorCoef ["place", 0];
+		_zgm  setCuratorCoef ["synchronize", 0];
+		_zgm  setCuratorCoef ["delete", 0];
+		_zgm  setCuratorCoef ["destroy", 0];
+
+	} foreach allCurators;
+
+	sleep 10;
 };
